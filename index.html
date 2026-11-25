@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>多语言词典 · 修正版</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(135deg, #0b1a2a 0%, #1a2f3f 100%);
+      min-height: 100vh; display: flex; justify-content: center; align-items: center;
+      font-family: 'Segoe UI', system-ui, Roboto, sans-serif; padding: 16px;
+    }
+    .dict-card {
+      background: rgba(18, 30, 43, 0.8); backdrop-filter: blur(16px);
+      border-radius: 40px; padding: 32px 28px; width: 100%; max-width: 700px;
+      box-shadow: 0 30px 50px rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.08);
+    }
+    h2 { color: #e0f0ff; text-align: center; font-weight: 400; letter-spacing: 2px; font-size: 1.8rem; margin-bottom: 24px; }
+    .lang-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; justify-content: center; }
+    .lang-selector {
+      flex: 1; min-width: 130px; background: #12212e; border: 1px solid #2e4b62;
+      border-radius: 40px; padding: 12px 20px; color: #e0f0ff; font-size: 1rem;
+      cursor: pointer; outline: none; appearance: none;
+    }
+    .search-area { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+    .search-area input {
+      flex: 2; min-width: 180px; background: #0d1a24; border: 1px solid #2b4b61;
+      border-radius: 50px; padding: 16px 22px; font-size: 1.2rem; color: #f0faff; outline: none;
+    }
+    .btn { background: #1d4057; border: none; color: white; padding: 16px 30px; border-radius: 50px; font-size: 1.1rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn:hover { background: #25648b; }
+    .btn-speak { background: #2e6b7a; }
+    .result-area { background: rgba(0,0,0,0.4); border-radius: 32px; padding: 28px 24px; min-height: 200px; display: flex; flex-direction: column; gap: 24px; border: 1px solid #1e3b4c; }
+    .word-label { color: #7da5c0; font-size: 0.9rem; text-transform: uppercase; }
+    .word-text { color: #ddf0ff; font-size: 2rem; font-weight: 500; word-break: break-word; }
+    .translated-block .word-text { color: #a0e0ff; }
+    .status-msg { color: #6e92a8; font-size: 1rem; text-align: center; padding: 20px 0; font-style: italic; }
+    .footnote { text-align: center; margin-top: 18px; color: #4f7187; font-size: 0.8rem; }
+    option { background: #0d1a24; color: white; }
+  </style>
+</head>
+<body>
+<div class="dict-card">
+  <h2>📖 多语言词典</h2>
+  <div class="lang-row">
+    <select id="sourceLang" class="lang-selector"></select>
+    <select id="targetLang" class="lang-selector"></select>
+  </div>
+  <div class="search-area">
+    <input type="text" id="queryWord" placeholder="输入要查询的词..." value="million">
+    <button class="btn" id="searchBtn">🔍 查词</button>
+    <button class="btn btn-speak" id="speakBtn">🔊 朗读</button>
+  </div>
+  <div class="result-area">
+    <div><div class="word-label">原文</div><div class="word-text" id="sourceWord">million</div></div>
+    <div class="translated-block"><div class="word-label">翻译</div><div class="word-text" id="translatedWord">—</div></div>
+    <div class="status-msg" id="statusMsg">点击“查词”获取翻译</div>
+  </div>
+  <div class="footnote">B站 Index-Translate（已关闭思考模式）· MyMemory 仅作兜底</div>
+</div>
+
+<script>
+(function() {
+  const languages = [
+    { code:'en', name:'English' }, { code:'zh', name:'中文' }, { code:'ja', name:'日本語' },
+    { code:'ko', name:'한국어' }, { code:'fr', name:'Français' }, { code:'de', name:'Deutsch' },
+    { code:'es', name:'Español' }, { code:'ru', name:'Русский' }, { code:'ar', name:'العربية' },
+    { code:'pt', name:'Português' }, { code:'it', name:'Italiano' }, { code:'th', name:'ไทย' },
+    { code:'vi', name:'Tiếng Việt' }, { code:'hi', name:'हिन्दी' }, { code:'nl', name:'Nederlands' },
+    { code:'pl', name:'Polski' }, { code:'tr', name:'Türkçe' }, { code:'sv', name:'Svenska' },
+    { code:'da', name:'Dansk' }, { code:'fi', name:'Suomi' }, { code:'no', name:'Norsk' },
+    { code:'cs', name:'Čeština' }, { code:'sk', name:'Slovenčina' }, { code:'hu', name:'Magyar' },
+    { code:'ro', name:'Română' }, { code:'bg', name:'Български' }, { code:'el', name:'Ελληνικά' },
+    { code:'he', name:'עברית' }, { code:'fa', name:'فارسی' }, { code:'uk', name:'Українська' },
+    { code:'id', name:'Indonesia' }, { code:'ms', name:'Melayu' }, { code:'ta', name:'தமிழ்' },
+    { code:'bn', name:'বাংলা' }, { code:'ur', name:'اردو' }, { code:'hr', name:'Hrvatski' },
+    { code:'sr', name:'Српски' }, { code:'sl', name:'Slovenščina' }, { code:'ca', name:'Català' },
+    { code:'af', name:'Afrikaans' }
+  ];
+
+  const sourceLang = document.getElementById('sourceLang');
+  const targetLang = document.getElementById('targetLang');
+  languages.forEach(l => {
+    const o1 = document.createElement('option');
+    o1.value = l.code; o1.textContent = l.name;
+    if (l.code === 'en') o1.selected = true;
+    sourceLang.appendChild(o1);
+    const o2 = document.createElement('option');
+    o2.value = l.code; o2.textContent = l.name;
+    if (l.code === 'zh') o2.selected = true;
+    targetLang.appendChild(o2);
+  });
+
+  const queryWord = document.getElementById('queryWord');
+  const sourceWordEl = document.getElementById('sourceWord');
+  const translatedWordEl = document.getElementById('translatedWord');
+  const statusMsg = document.getElementById('statusMsg');
+  let currentTranslated = '';
+
+  // B站翻译 —— 关键：必须注入 enable_thinking=false
+  async function bilibiliTranslate(text, target) {
+    const res = await fetch('https://index-translate.bilibili.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'Index-Translate-35B-A3B',
+        messages: [
+          { role: 'user', content: `请将以下文本翻译为${target}，直接输出翻译结果，不要进行任何解释。\n\n${text}` }
+        ],
+        temperature: 0,
+        // 关键参数：关闭思考模式，否则会输出推理链而非译文
+        chat_template_kwargs: { enable_thinking: false }
+      })
+    });
+    if (!res.ok) throw new Error('B站接口 HTTP ' + res.status);
+    const data = await res.json();
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      let out = data.choices[0].message.content.trim();
+      // 简单清理可能的标记
+      out = out.replace(/^译文[：:]\s*/, '').replace(/^翻译[：:]\s*/, '');
+      return out;
+    }
+    throw new Error('B站返回格式异常');
+  }
+
+  async function myMemoryTranslate(text, source, target) {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${source}|${target}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.responseData && data.responseData.translatedText) {
+      return data.responseData.translatedText;
+    }
+    throw new Error('MyMemory 无结果');
+  }
+
+  async function searchWord() {
+    const text = queryWord.value.trim();
+    if (!text) { statusMsg.textContent = '请输入要查询的词'; return; }
+    const src = sourceLang.value, tgt = targetLang.value;
+    const tgtName = targetLang.options[targetLang.selectedIndex].text;
+    sourceWordEl.textContent = text;
+    translatedWordEl.textContent = '...';
+    statusMsg.textContent = '查询中...';
+    currentTranslated = '';
+
+    // 先尝试 B站（质量相对好）
+    try {
+      const translated = await bilibiliTranslate(text, tgtName);
+      if (translated) {
+        currentTranslated = translated;
+        translatedWordEl.textContent = translated;
+        statusMsg.textContent = '翻译成功（B站 Index-Translate）';
+        return;
+      }
+    } catch (e1) {
+      console.warn('B站翻译失败:', e1.message);
+    }
+
+    // B站失败再走 MyMemory（质量差，但至少能出结果）
+    try {
+      const translated = await myMemoryTranslate(text, src, tgt);
+      currentTranslated = translated;
+      translatedWordEl.textContent = translated;
+      statusMsg.textContent = '翻译成功（MyMemory 兜底，质量可能较差）';
+    } catch (e2) {
+      translatedWordEl.textContent = '—';
+      statusMsg.textContent = '翻译失败，请稍后重试';
+    }
+  }
+
+  function speakTranslated() {
+    if (!currentTranslated || currentTranslated === '—') { statusMsg.textContent = '请先查词'; return; }
+    if (!window.speechSynthesis) { statusMsg.textContent = '浏览器不支持语音合成'; return; }
+    speechSynthesis.cancel();
+
+    const doSpeak = () => {
+      const u = new SpeechSynthesisUtterance(currentTranslated);
+      u.lang = targetLang.value;
+      u.rate = 0.9;
+      const voices = speechSynthesis.getVoices();
+      const tgt = targetLang.value;
+      const matched = voices.find(v => v.lang.startsWith(tgt + '-') || v.lang === tgt);
+      if (matched) u.voice = matched;
+      u.onstart = () => { statusMsg.textContent = '🔊 正在朗读...'; };
+      u.onend = () => { statusMsg.textContent = '朗读结束'; };
+      u.onerror = (e) => { statusMsg.textContent = '朗读失败：' + (e.error || '未知错误'); };
+      speechSynthesis.speak(u);
+    };
+
+    if (speechSynthesis.getVoices().length === 0) {
+      speechSynthesis.onvoiceschanged = () => { doSpeak(); speechSynthesis.onvoiceschanged = null; };
+      setTimeout(() => { if (speechSynthesis.getVoices().length === 0) doSpeak(); }, 1000);
+    } else {
+      doSpeak();
+    }
+  }
+
+  document.getElementById('searchBtn').onclick = searchWord;
+  queryWord.addEventListener('keypress', e => { if (e.key === 'Enter') searchWord(); });
+  document.getElementById('speakBtn').onclick = speakTranslated;
+  setTimeout(searchWord, 300);
+})();
+</script>
+</body>
+</html>
